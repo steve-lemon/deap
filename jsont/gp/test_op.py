@@ -16,7 +16,7 @@ input = """
     "c":"C",
     "d":{
         "g":"G",
-        "h":[1]
+        "h":{}
     }
 }
 """
@@ -54,7 +54,7 @@ class TestBranchOperation(unittest.TestCase):
 
     def test_score(self):
         from . import op
-        (A, B, C, D, E, F) = ('A', 'B', 'C', 'D', 'E', 'F')
+        (A, B, C, D, E, F, G, H, I, J, X, Y, Z) = list('A,B,C,D,E,F,G,H,I,J,X,Y,Z'.split(','))
         (n, l, t, d) = ('n', 'l', 't', 'd')
         check = lambda x,y,z: self.assertEqual(op.score(x, y), z)
         fit = lambda x,y,z: self.assertEqual(op.fitness(x, y), z)
@@ -63,24 +63,45 @@ class TestBranchOperation(unittest.TestCase):
         check(1, 0          ,{ n: 0, l: 0, t: 1, d: 0 })
         check(0, 1          ,{ n: 0, l: 0, t: 1, d: 0 })
 
-        check({ A: 1 }, { A: 1 }                ,{ n: 1, l: 1, t: 2, d: 1 })    #! fitness = 1 + (1+1)/2
-        check({ A: 0 }, { A: 1 }                ,{ n: 1, l: 0, t: 2, d: 1 })    #! fitness = 1 + (1+0)/2
-        check({ A: 1 }, { A: { B: 1 } }         ,{ n: 1, l: 0, t: 3, d: 2 })    #! fitness = 1 + (1+1)/3
+        check({ A: 1 }, { A: 1 }                ,{ n: 1, l: 1, t: 2, d: 1 })    #! fitness = 1 + (1+1)/2    = 2
+        check({ A: 0 }, { A: 1 }                ,{ n: 1, l: 0, t: 2, d: 1 })    #! fitness = 1 + (1+0)/2    = 1.5
+        check({ A: 1 }, { A: { B: 1 } }         ,{ n: 1, l: 0, t: 3, d: 2 })    #! fitness = 1 + (1+0)/3    = 1.3
+        check({ A: { B: 1 } }, { A: 1 }         ,{ n: 1, l: 0, t: 2, d: 1 })    #! fitness = 1 + (1+0)/2    = 1.5
 
-        check({ A: { B: 1 } }, { A: 1 }         ,{ n: 1, l: 0, t: 2, d: 1 })    #! fitness = 1 + (1+0)/2
-        check({ B: { A: 1 } }, { A: 1 }         ,{ n: 1, l: 0, t: 3, d: 1 })    #! fitness = 1 + (1+1)/3
-        check({ A: { B: 1 } }, { A: { B: 1 } }  ,{ n: 2, l: 1, t: 3, d: 2 })    #! fitness = 2 + (2+1)/3
-        check({ A: { B: 1 } }, { A: { B: 2 } }  ,{ n: 2, l: 0, t: 3, d: 2 })    #! fitness = 2 + (2+0)/3
-        check({ A: { C: 1 } }, { A: { B: 1 } }  ,{ n: 2, l: 0, t: 4, d: 2 })    #! fitness = 2 + (2+0)/4
+        check({ A: { B: 1 } }, { A: 1 }         ,{ n: 1, l: 0, t: 2, d: 1 })    #! fitness = 1 + (1+0)/2    = 1.5
+        check({ B: { A: 1 } }, { A: 1 }         ,{ n: 1, l: 0, t: 3, d: 1 })    #! fitness = 1 + (1+1)/3    = 1.6
+
+        check({ A: { B: 1 } }, { A: { B: 1 } }  ,{ n: 2, l: 1, t: 3, d: 2 })    #! fitness = 2 + (2+1)/3    = 3
+        check({ A: { B: 1 } }, { A: { B: 2 } }  ,{ n: 2, l: 0, t: 3, d: 2 })    #! fitness = 2 + (2+0)/3    = 2.6
+        check({ A: { C: 1 } }, { A: { B: 1 } }  ,{ n: 2, l: 0, t: 4, d: 2 })    #! fitness = 2 + (2+0)/4    = 2.5
 
         fit({ A: { B: 1 } }, { A: { B: 1 } }    ,2 + (2+1)/3.0 )    #! fitness = 2 + (2+1)/3
         fit({ A: { C: 1 } }, { A: { B: 1 } }    ,2 + (2+0)/4.0 )    #! fitness = 2 + (2+1)/4
+
+    def test_spec_json(self):
+        from . import op
+        jp = op.JsonTransformer(input, output)
+        self.assertEqual(jp.hello(), 'json-transformer')
+
+        (A, B, C, D, E, F, G, H, I, J, X, Y, Z) = list('A,B,C,D,E,F,G,H,I,J,X,Y,Z'.split(','))
+        (n, l, t, d) = ('n', 'l', 't', 'd')
+        check = lambda x,y,z: self.assertEqual(op.spec_json(x, y), z)
+
+        check({ A: 1}           ,True, { A: 1})
+        check({ A: []}          ,True, { A:{ '*': None }})
+        check({ A: [1]}         ,True, { A:{ '*': 1 }})
+        check({ A: [2,3]}       ,True, { A:{ '*': 2 }})
+        check({ A: [{}]}        ,True, { A:{ '*': {} }})
+        check({ A: [{ B:1 }]}   ,True, { A:{ '*': { B:1 } }})
 
 
     def test_json_transformer(self):
         from . import op
         jp = op.JsonTransformer(input, output)
         self.assertEqual(jp.hello(), 'json-transformer')
+
+        (A, B, C, D, E, F, G, H, I, J, X, Y, Z) = list('A,B,C,D,E,F,G,H,I,J,X,Y,Z'.split(','))
+        (n, l, t, d) = ('n', 'l', 't', 'd')
 
         # test build_tables() - node_table
         self.assertEqual(jp.build_tables({})[0], {'$':{}})
@@ -107,7 +128,7 @@ class TestBranchOperation(unittest.TestCase):
         self.assertEqual(jp.nodes(), ['$','$.0','$.2','$.2.1'])
         self.assertEqual(jp.nodes('$.0')['node'], {'e':'E','f':'F'})
         self.assertEqual(jp.nodes('$.0')['head'], 'b')
-        self.assertEqual(jp.nodes('$.2')['node'], {'g':'G','h':[1]})
+        self.assertEqual(jp.nodes('$.2')['node'], {'g':'G','h':{}})
         self.assertEqual(jp.nodes('$.2')['head'], 'd')
 
         # test branchs() to select branch.

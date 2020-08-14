@@ -17,6 +17,18 @@ def copy_json(data):
 def dump_json(data,indent=2):
     return json.dumps(data, ensure_ascii=False, sort_keys=True, indent=indent)
 
+def spec_json(data, forward=True):
+    ''' convert json to spec format '''
+    def walker(N):
+        if isinstance(N, dict):
+            for i,k in enumerate(N):
+                N[k] = walker(N[k])
+        elif isinstance(N, list):
+            return { '*': walker(N[0]) if len(N) > 0 else None }    # transform `[A,B,...]`` to `{ '*': A }``
+        return N
+    return walker(data)
+
+
 def score(left, right, branch='', depth=0):
     ''' calculate element's score '''
     isdict = right and isinstance(right, dict)
@@ -60,12 +72,13 @@ class JsonNode(AbstractGP):
     - represent single node instance in GP process.
     '''
     _next = 100000
-    def __init__(self, id='', head='', node=None):
+    def __init__(self, id='', head='', node=None, src=''):
         super().__init__()
         if not node is None and not isinstance(node, dict): raise TypeError('node({}/{}) should be dict'.format(head, id))
         self.id = id                    # the id of this
         self.head = head                # the up-branch name
         self.node = node                # the json data
+        self._src = src                 # the origin-id of source
 
     def __repr__(self):
         return {'id':self.id,'head':self.head,'node':self.node}
@@ -74,6 +87,7 @@ class JsonNode(AbstractGP):
         return 'json-node'
 
     def has_brach(self, branch):
+        if branch == '': return False
         return self.node and isinstance(self.node, dict) and branch in self.node
 
     def branch(self, branch=''):
@@ -124,8 +138,8 @@ class JsonNode(AbstractGP):
 
     def append(self, right):
         if self.node and isinstance(self.node, dict):
-            head = right.head
-            self.node[head] = copy_json(right.node) if right.node else None
+            if right and right.head:
+                self.node[right.head] = copy_json(right.node) if right.node else None
         return self
 
 
@@ -142,8 +156,8 @@ class JsonTransformer(AbstractGP):
     '''
     def __init__(self, input, output):
         super().__init__()
-        self._input = load_json(input) if isinstance(input, str) else input
-        self._output = load_json(output) if isinstance(output, str) else output
+        self._input = spec_json(load_json(input) if isinstance(input, str) else input)
+        self._output = spec_json(load_json(output) if isinstance(output, str) else output)
         self._tables = self.build_tables(self._input)
         self._nodes = {}            # map of JsonNode by id.
 
@@ -197,7 +211,7 @@ class JsonTransformer(AbstractGP):
         if jn is None:
             N = self.nodes(id)
             I = JsonNode.uuid()
-            jn = JsonNode(I, N['head'], copy_json(N['node']))
+            jn = JsonNode(I, N['head'], copy_json(N['node']), id)
             self._nodes[I] = jn
         return jn
 
@@ -231,7 +245,7 @@ class JsonTransformer(AbstractGP):
         right = self._output
         return fitness(left, right)
 
-    def run(self, population=40):
+    def run(self, population=40, max_=4):
         import numpy, random, operator
         from deap import algorithms, base, creator, tools, gp
 
@@ -285,7 +299,7 @@ class JsonTransformer(AbstractGP):
         creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
         toolbox = base.Toolbox()
-        toolbox.register("expr", gp.genFull, pset=pset, min_=2, max_=4)
+        toolbox.register("expr", gp.genFull, pset=pset, min_=2, max_=max_)
         toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         toolbox.register("compile", gp.compile, pset=pset)
@@ -321,7 +335,7 @@ class JsonTransformer(AbstractGP):
         print("Best Score    = %s "   % ( best_solution.fitness.values ))
         print("Best Solution = %s "   % ( best_solution ))
         print("Best Node[%s] = %s "   % ( best_id, dump_json(self.get(best_id).node) ))
-        print("Expected      = %s "   % ( dump_json(self.get(toolbox.compile(expr="select(select('$.0', 0), first(select('$', 0)))")).node, indent=None) ) )
+        # print("Expected      = %s "   % ( dump_json(self.get(toolbox.compile(expr="select(select('$.0', 0), first(select('$', 0)))")).node, indent=None) ) )
         print("-"*64)
 
         return pop, stats, hof,  best_solution
@@ -332,10 +346,20 @@ class JsonTransformer(AbstractGP):
 def main():
     import random
     random.seed(10)
-    # jt = JsonTransformer('{ "a":{ "b":1 } }', '{ "a":1 }')        #TODO - improve! `child('$', last('$'))`
-    # jt = JsonTransformer('{ "a":{ "b":1 } }', '{ "b":2 }')
-    jt = JsonTransformer('{ "A":{ "X":2 } }', '{ "X":2 }')
-    (pop, stats, hof, best) = jt.run(40)
+    (A, B, C, D, E, F, G, H, I, J, X, Y, Z) = list('A,B,C,D,E,F,G,H,I,J,X,Y,Z'.split(','))
+    (a, b, c, d, e, f, g, h, i, j, x, y, z) = list('a,b,c,d,e,f,g,h,i,j,x,y,z'.split(','))
+
+    # jt = JsonTransformer({ A:{ B:1 } }, { A:1 })        #TODO - improve! `child('$', last('$'))`
+    # jt = JsonTransformer({ A:{ B:1 } }, { B:2 })
+    # jt = JsonTransformer({ A:{ B:{ X:2} } }, { X:2 })
+    # jt = JsonTransformer({ A:{ B:{ X:2} } }, { B:2 })
+    # jt = JsonTransformer({ A:{ X:2, Y:3 } }, { A:3 })
+    jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{ X:2, Y:3 } }, { A:3 })
+    # jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{ X:2, Y:3 } }, { X:2, A:3 })
+    # jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{} }, { X:2 })
+    # jt = JsonTransformer({ A:{ X:[2] } }', '{ X:[2] }')
+    # jt = JsonTransformer({ A:{ X:{ Y:Y, "Y2":"y2" }, Z:Z }, B:{ C:c }, D:d }, { A:"y2" })
+    (pop, stats, hof, best) = jt.run(50)
 
 
 #! run main()
