@@ -261,48 +261,31 @@ class JsonTransformer(AbstractGP):
         node_branches = self.branches()     # like ['a','b']
         print('! node_id_list = {}'.format(node_id_list))
 
-        def select(id, idx):        # (string, number) => string
-            jn = self.select(id, idx)
-            return jn.id
-
-        def child(id, idx):         # (string, number) => string
-            jn = self.child(id, idx)
-            return jn.id
-
-        def child2(id, i1, i2):     # (string, number, number) => string
-            jn = self.child2(id, i1, i2)
-            return jn.id
-
-        def append(id1, id2):       # (string, string) => string
-            jn = self.append(id1, id2)
-            return jn.id
-
-        def head(id):               # (string) -> int
-            return 0
-
-        def last(id):               # (string) -> int
-            jn = self.get(id)
-            b = jn.last()
-            return node_branches.index(b) if b else 0
-
-        def first(id):              # (string) -> int
-            jn = self.get(id)
-            b = jn.first()
-            return node_branches.index(b) if b else 0
+        #! operators
+        _branch = lambda b: node_branches.index(b) if b in node_branches else 0
+        select  = lambda id, idx: self.select(id, idx).id           # (str, int) -> str
+        child   = lambda id, idx: self.child(id, idx).id            # (str, int) -> str
+        child2  = lambda id, i1, i2: self.child2(id, i1, i2).id     # (str, int, int) -> str
+        append  = lambda id1, id2: self.append(id1, id2).id         # (str, str) -> str
+        head    = lambda id: 0                                      # (str) -> int
+        first   = lambda id: _branch(self.get(id).first())          # (str) -> int
+        last    = lambda id: _branch(self.get(id).last())           # (str) -> int
 
         #! prepare GP
         pset = gp.PrimitiveSetTyped("main", [], str)
-        pset.addPrimitive(last  , [str], int)
-        pset.addPrimitive(first , [str], int)
-        pset.addPrimitive(select, [str, int], str)
-        # pset.addPrimitive(child , [str, int], str)
-        pset.addPrimitive(child2, [str, int, int], str)
-        pset.addPrimitive(append, [str, str], str)
-        # pset.addTerminal(0, int)
+        pset.addPrimitive(select, [str, int]        , str, name='select')
+        # pset.addPrimitive(child , [str, int]      , str, name='child')
+        pset.addPrimitive(child2, [str, int, int]   , str, name='child2')
+        pset.addPrimitive(append, [str, str]        , str, name='append')
+        pset.addPrimitive(first , [str]             , int, name='first')
+        # pset.addPrimitive(last  , [str]           , int, name='last')
+        pset.addTerminal(0, int)
     
+        #! ephemeral-constrant
         pset.addEphemeralConstant('id', lambda: random.choice(node_id_list), str)
         pset.addEphemeralConstant('idx', lambda: random.randint(0, len(node_branches)), int)
 
+        #! fitness
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
         creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
@@ -313,7 +296,6 @@ class JsonTransformer(AbstractGP):
         toolbox.register("compile", gp.compile, pset=pset)
 
         def evaluate(individual):
-            # print('! individual = {}'.format(individual))
             id = toolbox.compile(expr=individual)
             fit = self.fitness(id)
             # print('> node[{}] = {:1f} - {}'.format(id, fit, dump_json(self.get(id).node)))
@@ -325,6 +307,7 @@ class JsonTransformer(AbstractGP):
         toolbox.register("expr_mut", gp.genGrow, min_=0, max_=2)
         toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
+        #! gen statistics
         pop = toolbox.population(n=population)
         hof = tools.HallOfFame(1)
         stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -344,6 +327,7 @@ class JsonTransformer(AbstractGP):
         print("Best Solution = %s "   % ( best_solution ))
         print("Best Node[%s] = %s "   % ( best_id, dump_json(self.get(best_id).node) ))
         # print("Expected      = %s "   % ( dump_json(self.get(toolbox.compile(expr="select(select('$.0', 0), first(select('$', 0)))")).node, indent=None) ) )
+        print("Expected      = %s "   % ( dump_json(self.get(toolbox.compile(expr="child2(select('$.0', 0),0,2)")).node, indent=None) ) )
         print("-"*64)
 
         return pop, stats, hof,  best_solution
@@ -354,21 +338,23 @@ class JsonTransformer(AbstractGP):
 def main():
     import random
     random.seed(10)
+
     (A, B, C, D, E, F, G, H, I, J, X, Y, Z) = list('A,B,C,D,E,F,G,H,I,J,X,Y,Z'.split(','))
     (a, b, c, d, e, f, g, h, i, j, x, y, z) = list('a,b,c,d,e,f,g,h,i,j,x,y,z'.split(','))
 
-    # jt = JsonTransformer({ A:{ B:1 } }, { A:1 })        #TODO - improve! `child('$', last('$'))`
-    # jt = JsonTransformer({ A:{ B:1 } }, { B:2 })
-    # jt = JsonTransformer({ A:{ B:{ X:2} } }, { X:2 })
-    # jt = JsonTransformer({ A:{ B:{ X:2} } }, { B:2 })
+    jt = JsonTransformer({ A:{ B:1 } }, { A:1 })        #TODO - improve! `child('$', last('$'))`
+    # jt = JsonTransformer({ A:{ B:1 }, C:{ D: 2 } }, { A:1 })
+    # jt = JsonTransformer({ A:{ B:1 } }, { B:1 })
+    # jt = JsonTransformer({ A:{ B:1 }, C:{ D: 2 } }, { B:1 })
+    # jt = JsonTransformer({ A:{ B:{ X:2 }} }, { X:2 })
+    # jt = JsonTransformer({ A:{ B:{ X:2 }} }, { B:2 })
     # jt = JsonTransformer({ A:{ X:2, Y:3 } }, { A:3 })
-    jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{ X:2, Y:3 } }, { A:3 })
+    # jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{ X:3, Y:4 } }, { A:3 })
     # jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{ X:2, Y:3 } }, { X:2, A:3 })
     # jt = JsonTransformer({ A:{ X:2, Y:3 }, B:{} }, { X:2 })
     # jt = JsonTransformer({ A:{ X:[2] } }', '{ X:[2] }')
-    # jt = JsonTransformer({ A:{ X:{ Y:Y, "Y2":"y2" }, Z:Z }, B:{ C:c }, D:d }, { A:"y2" })
+    # jt = JsonTransformer({ A:{ X:{ Y:Y, G:G }, Z:Z }, B:{ C:c }, D:d }, { A:'G' })
     (pop, stats, hof, best) = jt.run(50)
-
 
 #! run main()
 # $ python -m gp.op
