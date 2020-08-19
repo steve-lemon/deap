@@ -1,9 +1,14 @@
 #   
 #   
 #   
-#   ```sh
-#   cd jsont
-#   python -m unittest tests.test_op
+# ```sh
+# # run unittest
+# $ cd jsont
+# $ python -m unittest gp.test_op
+#
+# # run in watch
+# $ pip install pytest-watch
+# $ ptw
 import unittest
 
 #! input spec.
@@ -80,6 +85,7 @@ class TestBranchOperation(unittest.TestCase):
 
     def test_spec_json(self):
         from . import op
+        # test spec
         jp = op.JsonTransformer(input, output)
         self.assertEqual(jp.hello(), 'json-transformer')
 
@@ -94,6 +100,34 @@ class TestBranchOperation(unittest.TestCase):
         check({ A: [{}]}        ,True, { A:{ '*': {} }})
         check({ A: [{ B:1 }]}   ,True, { A:{ '*': { B:1 } }})
 
+    def test_build_tables(self):
+        from . import op
+        # test build_tables() - node_table
+        self.assertEqual(op.build_tables({})[0], {'$':{}})
+        self.assertEqual(op.build_tables([])[0], {'$':{'*': None}})
+        self.assertEqual(op.build_tables({'a':1})[0], {'$':{'a':1}})
+        self.assertEqual(op.build_tables({'a':{'b':1}})[0], {'$':{'a':{'b':1}},'$.0':{'b':1}})
+        self.assertEqual(list(op.build_tables({'a':{'b':1}})[0].keys()), ['$','$.0'])
+
+        # test build_tables() - branch_table
+        self.assertEqual(op.build_tables({})[1], {})
+        self.assertEqual(op.build_tables([])[1], {'*': 1})
+        self.assertEqual(op.build_tables({'a':1})[1], {'a':1})
+        self.assertEqual(op.build_tables({'a':{'b':1}})[1], {'a':1,'b':1})
+
+        # test build_tables() - up-branch of node
+        self.assertEqual(op.build_tables({})[2], {'$':''})
+        self.assertEqual(op.build_tables([])[2], {'$':''})
+        self.assertEqual(op.build_tables({'a':1})[2], {'$':''})
+        self.assertEqual(op.build_tables({'a':{'b':1}})[2], {'$':'','$.0':'a'}) # 'a' is branch name
+
+        # test the input.json
+        i0 = op.load_json('./gp/input.json')
+        self.assertEqual(isinstance(i0, dict), True)
+        self.assertEqual(sorted(op.build_tables(i0)[0].keys()), ['$','$.4','$.5','$.5.0','$.6'])
+        self.assertEqual(sorted(op.build_tables(i0)[1].keys()), ['*','address','age','children','city','firstName','isAlive','lastName','number','phoneNumbers','postalCode','spouse','state','streetAddress','type'])
+        self.assertEqual(sorted(op.build_tables(i0)[2].keys()), ['$','$.4','$.5','$.5.0','$.6'])
+
 
     def test_json_transformer(self):
         from . import op
@@ -102,25 +136,6 @@ class TestBranchOperation(unittest.TestCase):
 
         (A, B, C, D, E, F, G, H, I, J, X, Y, Z) = list('A,B,C,D,E,F,G,H,I,J,X,Y,Z'.split(','))
         (n, l, t, d) = ('n', 'l', 't', 'd')
-
-        # test build_tables() - node_table
-        self.assertEqual(jp.build_tables({})[0], {'$':{}})
-        self.assertEqual(jp.build_tables([])[0], {'$':[]})
-        self.assertEqual(jp.build_tables({'a':1})[0], {'$':{'a':1}})
-        self.assertEqual(jp.build_tables({'a':{'b':1}})[0], {'$':{'a':{'b':1}},'$.0':{'b':1}})
-        self.assertEqual(list(jp.build_tables({'a':{'b':1}})[0].keys()), ['$','$.0'])
-
-        # test build_tables() - branch_table
-        self.assertEqual(jp.build_tables({})[1], {})
-        self.assertEqual(jp.build_tables([])[1], {})
-        self.assertEqual(jp.build_tables({'a':1})[1], {'a':1})
-        self.assertEqual(jp.build_tables({'a':{'b':1}})[1], {'a':1,'b':1})
-
-        # test build_tables() - up-branch of node
-        self.assertEqual(jp.build_tables({})[2], {'$':''})
-        self.assertEqual(jp.build_tables([])[2], {'$':''})
-        self.assertEqual(jp.build_tables({'a':1})[2], {'$':''})
-        self.assertEqual(jp.build_tables({'a':{'b':1}})[2], {'$':'','$.0':'a'}) # 'a' is branch name
 
         # test nodes() to select node
         self.assertRaises(IndexError, lambda: jp.nodes(''))

@@ -8,7 +8,10 @@ import os, json
 
 def load_json(txt):
     if not isinstance(txt, str): raise TypeError('txt should be str')
-    return json.loads(txt.strip())
+    if txt.startswith('./'):        # as file-name
+        with open(txt, 'r') as f:
+            return json.load(f)
+    return json.loads(txt.strip())  # as json-text
 
 def copy_json(data):
     import copy
@@ -28,6 +31,32 @@ def spec_json(data, forward=True):
         return N
     return walker(data)
 
+def build_tables(jsn):
+    '''
+    build `node` and `branch` lookup table.
+    @param M - map of node by id
+    @param B - branch count by name
+    @param H - head of node by id
+    @param N - current node.
+    '''
+    def reduce_node(M, B, H, N, id = '', attr = ''):
+        ''' reduce `N` to M{id:node}, B[branch-name], H[head-branch] '''
+        if (isinstance(N, list)):
+            M[id] = N
+            H[id] = attr
+            for i,k in enumerate(N):
+                # print('{} : {}'.format(i, k))
+                reduce_node(M, B, H, N[i], '{}.{}'.format(id, i), '[{}]'.format(i))
+        elif isinstance(N, dict):
+            M[id] = N
+            H[id] = attr
+            for i,k in enumerate(N.keys()):
+                # print('{} - {}'.format(i, k))
+                B[k] = B[k] + 1 if k in B else 1       # increment count#
+                reduce_node(M, B, H, N[k], '{}.{}'.format(id, i), k)
+        return (M, B, H)
+    # build node-table by id to node.
+    return reduce_node({}, {}, {}, spec_json(jsn), '$')  # `$` means the root node.
 
 def score(left, right, branch='', depth=0):
     ''' calculate element's score '''
@@ -52,6 +81,7 @@ def score(left, right, branch='', depth=0):
         R['l'] += S['l'] if 'l' in S else 0                     # leaf count
         R['t'] += S['t'] if 't' in S else 0                     # total count
         R['d'] = max(R['d'], S['d'] if 'd' in S else 0)         # max depth.
+    # `Expense` summary.
     return R
 
 def fitness(left, right):
@@ -64,7 +94,8 @@ class AbstractGP(object):
     class: `AbstractGP`
     - abstract common class.
     '''
-    pass
+    def __init__(self):
+        pass
 
 class JsonNode(AbstractGP):
     '''
@@ -156,36 +187,13 @@ class JsonTransformer(AbstractGP):
     '''
     def __init__(self, input, output):
         super().__init__()
-        self._input = spec_json(load_json(input) if isinstance(input, str) else input)
-        self._output = spec_json(load_json(output) if isinstance(output, str) else output)
-        self._tables = self.build_tables(self._input)
-        self._nodes = {}            # map of JsonNode by id.
+        self._input  = load_json(input) if isinstance(input, str) else input
+        self._output = load_json(output) if isinstance(output, str) else output
+        self._tables = build_tables(self._input)
+        self._nodes  = {}            # map of JsonNode by id.
 
     def hello(self):
         return 'json-transformer'
-
-    def build_tables(self, j):
-        '''
-        build `node` and `branch` lookup table.
-        '''
-        def reduce_node(M, B, H, N, id = '', attr = ''):
-            ''' reduce `N` to M{id:node}, B[branch-name], H[head-branch] '''
-            if (isinstance(N, list)):
-                M[id] = N
-                H[id] = attr
-                for i,k in enumerate(N):
-                    # print('{} : {}'.format(i, k))
-                    reduce_node(M, B, H, N[i], '{}.{}'.format(id, i), '[{}]'.format(i))
-            elif isinstance(N, dict):
-                M[id] = N
-                H[id] = attr
-                for i,k in enumerate(N.keys()):
-                    # print('{} - {}'.format(i, k))
-                    B[k] = B[k] + 1 if k in B else 1       # increment count#
-                    reduce_node(M, B, H, N[k], '{}.{}'.format(id, i), k)
-            return (M, B, H)
-        # build node-table by id to node.
-        return reduce_node({}, {}, {}, j, '$')  # `$` means the root node.
 
     def nodes(self, id=None):
         ''' select node by id '''
