@@ -1,14 +1,22 @@
 # jsont
 
-json transformer by using GP Tree
+json transformer by using GP Tree operators.
 
 
 ## Development
 
-- Tree Operations
+- this project is based on [deap](https://github.com/DEAP/deap) python project.
 
+### Installation
 
-### Run UnitTest
+- should install `deap` packages before to run. (see [README](../README.md))
+
+```sh
+# required to run once.
+$ python setup.py install
+```
+
+### Run Self-Test
 
 - execute unittest w/ stdout by `nose`.
 
@@ -24,7 +32,7 @@ $ pip install pytest-watch
 $ ptw
 ```
 
-### Run Code
+### Run Sample
 
 - execute in python (requires ver 3.x)
 
@@ -36,12 +44,12 @@ $ python -m gp.op
 
 ## Tree Operation
 
-- representation of JSON tree
+- representation of JSON tree, and operators.
 
 ![](assets/represent.png)
 
 
-- fitness of operators
+- fitness of JSON
 
 ![](assets/fitness.png)
 
